@@ -1,1 +1,15 @@
+# PyTorch (CPU版) のダウンロード元を追加のインデックスとして指定
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 streamlit
+# RVCの推論を簡単に行うためのラッパーライブラリ
+rvc-python
+# PyTorchライブラリ
+torch
+torchaudio
+# 音声録音のためのStreamlitコンポーネント
+streamlit-audiorecorder
+# streamlit-audiorecorderが依存する音声処理ライブラリ
+pydub
+# pyworldが依存するpkg_resourcesを提供するために必要
+setuptools

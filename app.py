@@ -1,114 +1,179 @@
 import streamlit as st
 import os
+import uuid
 from pathlib import Path
-import tempfile
+from typing import Dict, List, Optional
 
-# coreモジュールをインポートするために、
-# このファイルの親ディレクトリ（app）をPythonのパスに追加
-import sys
-sys.path.append(str(Path(__file__).resolve().parent))
+from audiorecorder import audiorecorder
+from pydub import AudioSegment
+from rvc_python.infer import RVCInference
 
-from core.inference import VoiceConverter
+# --- 1. 初期設定と定数定義 ---
 
-# --- 定数定義 ---
-MODEL_DIR = "./models/female_voice_1"
+st.set_page_config(layout="wide")
+st.title("🎙️ ボイスチェンジャーアプリ")
 
-def save_uploaded_file(uploaded_file) -> str:
+# ディレクトリパスの定義
+MODELS_DIR = Path("models")
+INPUT_DIR = Path("input_audio")
+OUTPUT_DIR = Path("output_audio")
+
+# 必要なディレクトリが存在しない場合は作成
+INPUT_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+# --- 2. モデル読み込みとキャッシュ ---
+
+@st.cache_resource
+def get_rvc_models() -> Dict[str, Dict[str, List[Path]]]:
     """
-    アップロードされたファイルを一時ディレクトリに保存し、そのパスを返します。
-
-    Args:
-        uploaded_file: st.file_uploaderから得られるUploadedFileオブジェクト。
+    `models`ディレクトリから利用可能なRVCモデルを読み込みます。
+    各モデルはサブディレクトリに格納されていることを前提とします。
 
     Returns:
-        str: 保存された一時ファイルのパス。
+        Dict[str, Dict[str, List[Path]]]: モデル名と、その.pthおよび.indexファイルのパスリストを格納した辞書。
     """
-    try:
-        # 一時ファイルを作成して内容を書き込む
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as fp:
-            fp.write(uploaded_file.getvalue())
-            return fp.name
-    except Exception as e:
-        st.error(f"ファイルの保存中にエラーが発生しました: {e}")
-        return ""
+    models: Dict[str, Dict[str, List[Path]]] = {}
+    if MODELS_DIR.exists():
+        for model_dir in MODELS_DIR.iterdir():
+            if model_dir.is_dir():
+                pth_files = sorted(list(model_dir.glob("*.pth")))
+                index_files = sorted(list(model_dir.glob("*.index")))
+                if pth_files:
+                    models[model_dir.name] = {
+                        "pth": pth_files,
+                        "index": index_files
+                    }
+    return models
 
-def main():
+models = get_rvc_models()
+
+# --- 3. UIコンポーネントの配置 ---
+
+st.sidebar.header("推論パラメータ")
+
+if not models:
+    st.error("'models' ディレクトリにモデルが見つかりません。RVCモデルを追加してください。")
+    st.stop()
+
+model_name: str = st.sidebar.selectbox("RVCモデルを選択", options=list(models.keys()))
+
+transpose: int = st.sidebar.slider(
+    "トランスポーズ（ピッチ）", min_value=-24, max_value=24, value=0, step=1,
+    help="ピッチを調整します。+12で1オクターブ上、-12で1オクターブ下です。"
+)
+
+f0_method: str = st.sidebar.selectbox(
+    "ピッチ抽出アルゴリズム", options=["rmvpe", "pm", "harvest", "crepe"], index=0,
+    help="ほとんどの場合でRMVPEを推奨します。"
+)
+
+index_rate: float = st.sidebar.slider(
+    "インデックスレート", min_value=0.0, max_value=1.0, value=0.75, step=0.01,
+    help="インデックスファイルが結果に与える影響を制御します。値が高いほど、元のアクセントがより保持されます。"
+)
+
+filter_radius: int = st.sidebar.slider(
+    "フィルター半径", min_value=0, max_value=10, value=3, step=1,
+    help=">=3の場合、ピッチの結果にメディアンフィルタを適用して、息っぽさを軽減します。"
+)
+
+resample_sr: int = st.sidebar.select_slider(
+    "出力のリサンプリング", options=[0, 16000, 22050, 24000, 44100, 48000], value=0,
+    help="出力音声をリサンプリングします。0はリサンプリングなしです。"
+)
+
+rms_mix_rate: float = st.sidebar.slider(
+    "音量エンベロープのミックスレート", min_value=0.0, max_value=1.0, value=0.25, step=0.01,
+    help="ソースと出力の音量エンベロープのバランスを取ります。0に近いほど、元の音量を模倣します。"
+)
+
+protect: float = st.sidebar.slider(
+    "無声子音を保護", min_value=0.0, max_value=0.5, value=0.33, step=0.01,
+    help="'s', 't', 'k'のような無声子音を保護します。0.5で無効になります。"
+)
+
+# --- 4. 音声変換処理のコアロジック ---
+
+def run_conversion(input_path: Path, output_filename_prefix: str) -> None:
     """
-    Streamlitアプリケーションのメイン関数。
+    指定された音声ファイルをRVCモデルで変換し、結果をUIに表示します。
+
+    Args:
+        input_path (Path): 変換する入力音声ファイルのパス。
+        output_filename_prefix (str): 出力ファイル名のプレフィックス。
     """
-    st.set_page_config(
-        page_title="AI Voice Labo",
-        page_icon="🎙️",
-        layout="centered"
-    )
-
-    st.title("AI Voice Labo 🗣️ -> 👩")
-    st.markdown("---_男性の声を特定の女性の声に変換するデモアプリケーションです。_---")
-
-    # --- 1. UIコンポーネントの配置 ---
-    st.header("1. 音声ファイルをアップロード")
-    uploaded_file = st.file_uploader(
-        "変換したいWAVファイルを選択してください", type=["wav"]
-    )
-
-    st.header("2. パラメータを設定")
-    pitch_change = st.slider(
-        "ピッチ（音の高さ）調整",
-        min_value=-24, 
-        max_value=24, 
-        value=12, 
-        step=1,
-        help="数値を上げると声が高く、下げると低くなります。男性から女性への変換では+12が一般的です。"
-    )
-
-    st.header("3. 変換を実行")
-    convert_button = st.button("変換実行", type="primary")
-
-    st.markdown("---")
-
-    # --- 2. 実行フローの実装 ---
-    if convert_button and uploaded_file is not None:
-        # アップロードされたファイルを一時保存
-        input_wav_path = save_uploaded_file(uploaded_file)
-        if not input_wav_path:
-            return
-
-        # VoiceConverterのインスタンスを作成
+    with st.spinner("変換中... しばらくお待ちください。"):
         try:
-            converter = VoiceConverter(model_dir=MODEL_DIR)
-        except FileNotFoundError as e:
-            st.error(f"モデルファイルの読み込みに失敗しました: {e}")
-            st.error("管理者にお問い合わせください。")
-            return
+            output_filename = f"{output_filename_prefix}_converted.wav"
+            output_path = OUTPUT_DIR / output_filename
 
-        # スピナーを表示して変換処理を実行
-        with st.spinner("AIによる音声変換を実行中... 少々お待ちください。"):
-            try:
-                output_wav_path = converter.convert_voice(input_wav_path, pitch_change)
-            except Exception as e:
-                st.error(f"音声変換中に予期せぬエラーが発生しました: {e}")
-                return
-        
-        st.success("音声変換が完了しました！")
+            model_paths = models[model_name]
+            
+            # 最初の.pthファイルを選択
+            pth_path: Path = model_paths["pth"][0]
+            
+            #.indexファイルが存在すれば最初のものを選択
+            index_path: Optional[Path] = model_paths["index"][0] if model_paths["index"] else None
 
-        # --- 3. 結果の表示とダウンロード ---
-        st.header("変換結果")
-        st.audio(output_wav_path, format="audio/wav")
+            # RVCInferenceのインスタンス化時にモデルパスを渡す
+            rvc = RVCInference(model_path=pth_path)
 
-        with open(output_wav_path, "rb") as f:
-            st.download_button(
-                label="変換後の音声をダウンロード",
-                data=f,
-                file_name=f"converted_voice_{Path(output_wav_path).name}",
-                mime="audio/wav"
+            rvc.infer_file(
+                input_path=input_path,
+                output_path=output_path,
+                f0_up_key=transpose,
+                f0_method=f0_method,
+                index_path=model_paths["index"][0] if model_paths["index"] else None,
+                index_rate=index_rate,
+                filter_radius=filter_radius,
+                resample_sr=resample_sr,
+                rms_mix_rate=rms_mix_rate,
+                protect=protect
             )
+
+            st.success("変換に成功しました！")
+            st.audio(str(output_path), format="audio/wav")
+
+            with open(output_path, "rb") as f:
+                st.download_button(
+                    label="変換後のファイルをダウンロード",
+                    data=f,
+                    file_name=output_filename,
+                    mime="audio/wav"
+                )
+        except Exception as e:
+            st.error(f"変換中にエラーが発生しました: {e}")
+
+# --- 5. タブUIによる入力方法の選択 ---
+
+tab_upload, tab_record = st.tabs(["⬆️ ファイルをアップロード", "🎙️ マイクで録音"])
+
+with tab_upload:
+    st.header("音声ファイルをアップロード")
+    uploaded_file = st.file_uploader(
+        "音声ファイル (WAV, MP3) をアップロード", type=["wav", "mp3"], label_visibility="collapsed"
+    )
+
+    if uploaded_file:
+        st.audio(uploaded_file, format=uploaded_file.type)
+        if st.button("アップロードしたファイルを変換"):
+            input_path = INPUT_DIR / uploaded_file.name
+            with open(input_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            run_conversion(input_path, Path(uploaded_file.name).stem)
+
+with tab_record:
+    st.header("マイクから音声を録音")
+    audio: AudioSegment = audiorecorder("クリックして録音", "クリックして停止")
+
+    if len(audio) > 0:
+        st.audio(audio.export().read())
         
-        # 一時ファイルをクリーンアップ
-        os.remove(input_wav_path)
-        # os.remove(output_wav_path) # ダウンロードのために残す
-
-    elif convert_button and uploaded_file is None:
-        st.warning("変換するWAVファイルをアップロードしてください。")
-
-if __name__ == "__main__":
-    main()
+        if st.button("録音した音声を変換"):
+            # ユニークなファイル名を生成して録音データを一時保存
+            input_filename = f"recorded_{uuid.uuid4()}.wav"
+            input_path = INPUT_DIR / input_filename
+            audio.export(input_path, format="wav")
+            
+            run_conversion(input_path, Path(input_filename).stem)
