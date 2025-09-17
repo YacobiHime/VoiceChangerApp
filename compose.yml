@@ -1,0 +1,15 @@
+services:
+  voice-changer-app:
+    # コンテナ名を指定
+    container_name: voice-changer-app
+    # カレントディレクトリのDockerfileを使用してイメージをビルド
+    build: .
+    # ホストPCのポート8501をコンテナのポート8501にマッピング
+    ports:
+      - "8501:8501"
+    # ホストPCのmodelsフォルダをコンテナの/app/modelsにマウント
+    # これにより、コンテナを再ビルドせずにモデルを追加・変更できる
+    volumes:
+      - ./models:/app/models
+      # 出力ファイルもホストPCと共有するための設定（任意）
+      - ./output_audio:/app/output_audio
