@@ -4,9 +4,9 @@
 streamlit
 # RVCの推論を簡単に行うためのラッパーライブラリ
 rvc-python
-# PyTorchライブラリ
-torch
-torchaudio
+# PyTorchライブラリ (バージョンを固定)
+torch==2.5.1
+torchaudio==2.5.1
 # 音声録音のためのStreamlitコンポーネント
 streamlit-audiorecorder
 # streamlit-audiorecorderが依存する音声処理ライブラリ

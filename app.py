@@ -54,7 +54,10 @@ def get_rvc_inference_model(pth_path: Path, index_path: Optional[Path]) -> RVCIn
     RVCモデルを読み込み、キャッシュします。
     """
     st.info(f"モデルを読み込んでいます: {pth_path.name}")
-    return RVCInference(model_path=pth_path, index_path=index_path)
+    return RVCInference(
+        model_path=str(pth_path),
+        index_path=str(index_path) if index_path else None
+    )
 
 # --- 3. UIコンポーネントの配置 ---
 
@@ -127,18 +130,27 @@ def run_conversion(input_path: Path, output_filename_prefix: str) -> None:
             # キャッシュされたRVCモデルを取得
             rvc = get_rvc_inference_model(pth_path, index_path)
 
-            # 推論を実行
-            rvc.infer_file(
-                input_path=input_path,
-                output_path=output_path,
-                f0_up_key=transpose,
-                f0_method=f0_method,
-                index_rate=index_rate,
-                filter_radius=filter_radius,
-                resample_sr=resample_sr,
-                rms_mix_rate=rms_mix_rate,
-                protect=protect
+            # パラメータをオブジェクトに設定
+            rvc.f0up_key = transpose
+            rvc.f0method = f0_method
+            rvc.index_rate = index_rate
+            rvc.filter_radius = filter_radius
+            rvc.resample_sr = resample_sr
+            rvc.rms_mix_rate = rms_mix_rate
+            rvc.protect = protect
+
+            # 推論を実行して結果をデバッグ
+            result = rvc.infer_file(
+                input_path=str(input_path),
+                output_path=str(output_path)
             )
+
+            # --- デバッグ情報 --- #
+            st.write("--- DEBUG INFO ---")
+            st.write(f"Type of result: {type(result)}")
+            st.write(f"Content of result: {result}")
+            st.write("--- END DEBUG INFO ---")
+
 
             st.success("変換に成功しました！")
             st.audio(str(output_path), format="audio/wav")
