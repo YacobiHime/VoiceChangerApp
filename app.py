@@ -48,6 +48,14 @@ def get_rvc_models() -> Dict[str, Dict[str, List[Path]]]:
 
 models = get_rvc_models()
 
+@st.cache_resource
+def get_rvc_inference_model(pth_path: Path, index_path: Optional[Path]) -> RVCInference:
+    """
+    RVCモデルを読み込み、キャッシュします。
+    """
+    st.info(f"モデルを読み込んでいます: {pth_path.name}")
+    return RVCInference(model_path=pth_path, index_path=index_path)
+
 # --- 3. UIコンポーネントの配置 ---
 
 st.sidebar.header("推論パラメータ")
@@ -116,15 +124,15 @@ def run_conversion(input_path: Path, output_filename_prefix: str) -> None:
             #.indexファイルが存在すれば最初のものを選択
             index_path: Optional[Path] = model_paths["index"][0] if model_paths["index"] else None
 
-            # RVCInferenceのインスタンス化時にモデルパスを渡す
-            rvc = RVCInference(model_path=pth_path)
+            # キャッシュされたRVCモデルを取得
+            rvc = get_rvc_inference_model(pth_path, index_path)
 
+            # 推論を実行
             rvc.infer_file(
                 input_path=input_path,
                 output_path=output_path,
                 f0_up_key=transpose,
                 f0_method=f0_method,
-                index_path=model_paths["index"][0] if model_paths["index"] else None,
                 index_rate=index_rate,
                 filter_radius=filter_radius,
                 resample_sr=resample_sr,
