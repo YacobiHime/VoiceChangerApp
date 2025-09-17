@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  app:
+    # カレントディレクトリのDockerfileを使用してイメージをビルド
+    build: .
+    # コンテナ名を指定
+    container_name: ai_voice_labo
+    # ポートのマッピング（ホスト:コンテナ）
+    ports:
+      - "8501:8501"
+    # ボリュームのマッピング（ホスト:コンテナ）
+    # これにより、コードの変更がコンテナに即時反映される
+    volumes:
+      - .:/app
