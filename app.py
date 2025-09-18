@@ -70,8 +70,8 @@ if not models:
 model_name: str = st.sidebar.selectbox("RVCモデルを選択", options=list(models.keys()))
 
 transpose: int = st.sidebar.slider(
-    "移調", min_value=-24, max_value=24, value=0, step=1,
-    help="音高を調整。+12で1オクターブ上。男女差は約12音。"
+    "トランスポーズ（ピッチ）", min_value=-24, max_value=24, value=0, step=1,
+    help="ピッチを調整します。+12で1オクターブ上、-12で1オクターブ下です。"
 )
 
 f0_method: str = st.sidebar.selectbox(
@@ -80,23 +80,23 @@ f0_method: str = st.sidebar.selectbox(
 )
 
 index_rate: float = st.sidebar.slider(
-    "特徴の影響率", min_value=0.0, max_value=1.0, value=0.75, step=0.01,
-    help="学習データの特徴が与える影響を制御します。値が高いほど、学習元のアクセントがより保持されます。"
+    "インデックスレート", min_value=0.0, max_value=1.0, value=0.75, step=0.01,
+    help="インデックスファイルが結果に与える影響を制御します。値が高いほど、元のアクセントがより保持されます。"
 )
 
 filter_radius: int = st.sidebar.slider(
-    "ノイズ軽減の範囲", min_value=0, max_value=10, value=3, step=1,
-    help=">=3の場合、ピッチの結果に中央値フィルタを適用して、息っぽさを軽減します。"
+    "フィルター半径", min_value=0, max_value=10, value=3, step=1,
+    help=">=3の場合、ピッチの結果にメディアンフィルタを適用して、息っぽさを軽減します。"
 )
 
 resample_sr: int = st.sidebar.select_slider(
-    "出力の音質", options=[0, 16000, 22050, 24000, 44100, 48000], value=0,
-    help="出力音声の再標本化。値を大きくすると音質が向上し、処理時間も増加する。"
+    "出力のリサンプリング", options=[0, 16000, 22050, 24000, 44100, 48000], value=0,
+    help="出力音声をリサンプリングします。0はリサンプリングなしです。"
 )
 
 rms_mix_rate: float = st.sidebar.slider(
-    "音量の変化幅", min_value=0.0, max_value=1.0, value=0.25, step=0.01,
-    help="音量の幅を調整します。値が0に近いほど、元の音量を模倣します。"
+    "音量エンベロープのミックスレート", min_value=0.0, max_value=1.0, value=0.25, step=0.01,
+    help="ソースと出力の音量エンベロープのバランスを取ります。0に近いほど、元の音量を模倣します。"
 )
 
 protect: float = st.sidebar.slider(
