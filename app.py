@@ -11,7 +11,7 @@ from rvc_python.infer import RVCInference
 # --- 1. 初期設定と定数定義 ---
 
 st.set_page_config(layout="wide")
-st.title("🎙️ ボイスチェンジャーアプリ")
+st.title("🎙️ RVC声質変換")
 
 # ディレクトリパスの定義
 MODELS_DIR = Path("models")
