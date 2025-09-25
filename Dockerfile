@@ -1,9 +1,15 @@
 # --- 1. ビルダーステージ ---
-# ライブラリのコンパイルに必要なツールを含むステージ
-FROM python:3.10-slim as builder
+# CUDA対応のPythonイメージをビルダーステージのベースとして使用
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04 as builder
 
 # ビルドとuvのインストールに必要なシステムパッケージを一度にインストール
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    python3.10 \
+    python3.10-dev \
+    python3.10-venv \
+    && rm -rf /var/lib/apt/lists/*
 
 # uvをインストールし、同じRUN命令内で仮想環境を作成
 # インストーラーがuvを/root/.local/binに配置するため、そのパスをエクスポートする
@@ -20,11 +26,16 @@ RUN uv pip install --no-cache --index-strategy unsafe-best-match -r requirements
 
 
 # --- 2. 最終ステージ ---
-# 実行に必要なものだけを含む軽量なステージ
-FROM python:3.10-slim
+# CUDA対応のPythonイメージを最終ステージのベースとして使用
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
 # 実行時に必要なシステムライブラリのみをインストール
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-venv \
+    ffmpeg \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 作業ディレクトリを設定
 WORKDIR /app
