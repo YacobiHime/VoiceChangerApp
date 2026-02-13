@@ -1,12 +1,12 @@
-# PyTorch (CPU版) のダウンロード元を追加のインデックスとして指定
---extra-index-url https://download.pytorch.org/whl/cpu
+# PyTorch (GPU版) のダウンロード元を追加のインデックスとして指定
+--extra-index-url https://download.pytorch.org/whl/cu121
 
 streamlit
 # RVCの推論を簡単に行うためのラッパーライブラリ
 rvc-python
-# PyTorchライブラリ (バージョンを固定)
-torch==2.5.1
-torchaudio==2.5.1
+# PyTorchライブラリ (CUDA 12.1対応バージョン)
+torch==2.5.1+cu121
+torchaudio==2.5.1+cu121
 # 音声録音のためのStreamlitコンポーネント
 streamlit-audiorecorder
 # streamlit-audiorecorderが依存する音声処理ライブラリ

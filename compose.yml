@@ -4,6 +4,14 @@ services:
     container_name: voice-changer-app
     # カレントディレクトリのDockerfileを使用してイメージをビルド
     build: .
+    # GPUサポートを有効化
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     # ホストPCのポート8501をコンテナのポート8501にマッピング
     ports:
       - "8501:8501"
